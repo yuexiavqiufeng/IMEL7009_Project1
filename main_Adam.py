@@ -10,13 +10,10 @@ if __name__ == '__main__':
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import StandardScaler
     from sklearn.utils import shuffle
-
     # 定义辅助函数加载MNIST数据集
     import gzip
     # 加载plot库用于Debug
     import matplotlib.pyplot as plt
-
-    import numpy as np
 
 
     # 读取图像文件
@@ -69,6 +66,20 @@ if __name__ == '__main__':
             self.regularization_strength = regularization_strength
             self.learning_rate = learning_rate
 
+            # Adam optimizer parameters
+            self.beta1 = 0.8
+            self.beta2 = 0.9
+            self.epsilon = 1e-8
+            self.m_W2 = np.zeros_like(self.W2)
+            self.v_W2 = np.zeros_like(self.W2)
+            self.m_b2 = np.zeros_like(self.b2)
+            self.v_b2 = np.zeros_like(self.b2)
+            self.m_W1 = np.zeros_like(self.W1)
+            self.v_W1 = np.zeros_like(self.W1)
+            self.m_b1 = np.zeros_like(self.b1)
+            self.v_b1 = np.zeros_like(self.b1)
+            self.t = 0
+
         def forward(self, X):
             self.z1 = np.dot(X, self.W1) + self.b1
             # Z1标准化
@@ -82,6 +93,8 @@ if __name__ == '__main__':
 
         def backward(self, X, y):
             num_examples = X.shape[0]
+            self.t += 1
+
             delta3 = self.probs
             delta3[range(num_examples), y] -= 1
             dW2 = np.dot(self.a1.T, delta3)
@@ -92,12 +105,33 @@ if __name__ == '__main__':
             dW1 = np.dot(X.T, delta2)
             db1 = np.sum(delta2, axis=0)
             # 加入L2正则化项的梯度更新
-            dW2 += self.regularization_strength * self.W2
-            dW1 += self.regularization_strength * self.W1
-            self.W1 -= self.learning_rate * dW1
-            self.b1 -= self.learning_rate * db1
-            self.W2 -= self.learning_rate * dW2
-            self.b2 -= self.learning_rate * db2
+            #dW2 += self.regularization_strength * self.W2
+            #dW1 += self.regularization_strength * self.W1
+
+            # Update parameters using Adam optimizer
+            self.m_W2 = self.beta1 * self.m_W2 + (1 - self.beta1) * dW2
+            self.v_W2 = self.beta2 * self.v_W2 + (1 - self.beta2) * (dW2 ** 2)
+            self.m_b2 = self.beta1 * self.m_b2 + (1 - self.beta1) * db2
+            self.v_b2 = self.beta2 * self.v_b2 + (1 - self.beta2) * (db2 ** 2)
+            self.m_W1 = self.beta1 * self.m_W1 + (1 - self.beta1) * dW1
+            self.v_W1 = self.beta2 * self.v_W1 + (1 - self.beta2) * (dW1 ** 2)
+            self.m_b1 = self.beta1 * self.m_b1 + (1 - self.beta1) * db1
+            self.v_b1 = self.beta2 * self.v_b1 + (1 - self.beta2) * (db1 ** 2)
+
+            # Apply bias correction
+            m_W2_corrected = self.m_W2 / (1 - self.beta1 ** self.t)
+            v_W2_corrected = self.v_W2 / (1 - self.beta2 ** self.t)
+            m_b2_corrected = self.m_b2 / (1 - self.beta1 ** self.t)
+            v_b2_corrected = self.v_b2 / (1 - self.beta2 ** self.t)
+            m_W1_corrected = self.m_W1 / (1 - self.beta1 ** self.t)
+            v_W1_corrected = self.v_W1 / (1 - self.beta2 ** self.t)
+            m_b1_corrected = self.m_b1 / (1 - self.beta1 ** self.t)
+            v_b1_corrected = self.v_b1 / (1 - self.beta2 ** self.t)
+
+            self.W2 -= self.learning_rate * m_W2_corrected / (np.sqrt(v_W2_corrected) + self.epsilon)
+            self.b2 -= self.learning_rate * m_b2_corrected / (np.sqrt(v_b2_corrected) + self.epsilon)
+            self.W1 -= self.learning_rate * m_W1_corrected / (np.sqrt(v_W1_corrected) + self.epsilon)
+            self.b1 -= self.learning_rate * m_b1_corrected / (np.sqrt(v_b1_corrected) + self.epsilon)
 
         def train(self, X, y, num_epochs):
             for epoch in range(num_epochs):
@@ -112,9 +146,9 @@ if __name__ == '__main__':
     input_size = X_train.shape[1]
     hidden_size = 1024
     output_size = len(np.unique(y_train))
-    learning_rate = 0.00001
+    learning_rate = 0.0000001
     num_epochs = 20
-    regularization_strength = 0.01  # L2正则化参数
+    regularization_strength = 0.001  # L2正则化参数
 
 
     # 创建神经网络对象并测试多个epochs
